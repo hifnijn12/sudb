@@ -944,7 +944,36 @@ document.getElementById('topbar-date').textContent =
     year:'numeric'
   });
 
-loadState();
+loadState().then(() => {
+  console.log('STATE:', state);
+});
+  async function loadState() {
+  try {
+
+    const { data, error } = await supabaseClient
+      .from('konter_state')
+      .select('*');
+
+    console.log('SUPABASE DATA:', data);
+    console.log('SUPABASE ERROR:', error);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    if (data && data.length > 0) {
+      state = data[0].data;
+    }
+
+    renderMiniSaldo();
+    renderSaldoDetail();
+
+  } catch (err) {
+    console.error(err);
+    alert(err.message);
+  }
+}
 </script>
 </body>
 </html>
