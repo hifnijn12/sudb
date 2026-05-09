@@ -451,7 +451,7 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #f5f5f0; m
       <i class="ti ti-login"></i> <span id="btn-login-label">Masuk</span>
     </button>
 
-    <!-- Resend section (muncul setelah daftar) -->
+    <!-- Resend section -->
     <div id="resend-box" style="display:none; margin-top:14px; text-align:center;">
       <div style="font-size:12px; color:#888; margin-bottom:8px;">Belum dapat emailnya?</div>
       <button class="btn-resend" id="btn-resend" onclick="resendEmail()">
@@ -770,7 +770,16 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #f5f5f0; m
 ═══════════════════════════════════════════ */
 const SUPABASE_URL = 'https://skedbagelbhkhqkkahzj.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrZWRiYWdlbGJoa2hxa2thaHpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyMzEyNjMsImV4cCI6MjA5MzgwNzI2M30.cCKigEV7XtCc_xoUrWHD6i_A5QADecCT88Ct04TZzy0';
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// FIX #2: persistSession: true memastikan token disimpan di localStorage
+// dan user tidak perlu login ulang selama token belum expired
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    persistSession: true,       // simpan session di localStorage (default sudah true, tapi eksplisit lebih aman)
+    autoRefreshToken: true,     // otomatis refresh token sebelum expired
+    detectSessionInUrl: true    // tangkap token dari URL setelah email konfirmasi
+  }
+});
 
 const SALDO_LABELS = { cash:'Cash', dana:'Dana', agen_pulsa:'Agen Pulsa', digipos:'Digipos', sea_bank:'Sea Bank' };
 const SALDO_ICONS  = { cash:'ti-cash', dana:'ti-credit-card', agen_pulsa:'ti-sim-card-2', digipos:'ti-device-tablet', sea_bank:'ti-building-bank' };
@@ -784,7 +793,11 @@ const defaultState = {
 
 let state = structuredClone(defaultState);
 let currentUser = null;
-let stateRowId = null; // ID baris di Supabase yang sedang dipakai user ini
+let stateRowId = null;
+
+// FIX #2: Flag untuk tahu apakah auth sudah selesai dicek saat load pertama
+// Ini mencegah login screen muncul sesaat saat Supabase sedang restore session
+let authResolved = false;
 
 /* ═══════════════════════════════════════════
    AUTH
@@ -797,7 +810,6 @@ function showLoginScreen(on) {
   document.getElementById('login-screen').classList.toggle('visible', on);
 }
 
-/* ── Login tab switch ── */
 let loginMode = 'masuk';
 function switchLoginTab(mode) {
   loginMode = mode;
@@ -808,6 +820,7 @@ function switchLoginTab(mode) {
   errEl.textContent = ''; errEl.style.color = '#D85A30';
 }
 
+// FIX #1: submitLogin diperbaiki — handle semua cabang signUp dengan benar
 async function submitLogin() {
   const email    = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-password').value;
@@ -823,48 +836,90 @@ async function submitLogin() {
   errEl.textContent = '';
 
   try {
-    let result;
     if(loginMode === 'masuk') {
-      result = await supabaseClient.auth.signInWithPassword({ email, password });
-    } else {
-      result = await supabaseClient.auth.signUp({ email, password });
-      if(!result.error && result.data?.user && !result.data.session) {
-        errEl.style.color = '#1D9E75';
-        errEl.textContent = '✓ Cek email kamu untuk konfirmasi, lalu masuk.';
-        btn.disabled = false;
-        btn.innerHTML = '<i class="ti ti-login"></i> <span id="btn-login-label">Daftar</span>';
+      // ── SIGN IN ──
+      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+      if(error) {
+        // FIX #1: Mapping pesan error lebih lengkap
+        const msg = error.message || '';
+        if(msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('fetch'))
+          errEl.textContent = 'Tidak bisa terhubung ke server. Cek koneksi internet.';
+        else if(msg.includes('Invalid login credentials') || msg.includes('invalid_credentials'))
+          errEl.textContent = 'Email atau password salah.';
+        else if(msg.includes('Email not confirmed'))
+          errEl.textContent = 'Email belum dikonfirmasi. Cek inbox kamu.';
+        else if(msg.includes('Too many requests'))
+          errEl.textContent = 'Terlalu banyak percobaan. Tunggu beberapa menit.';
+        else
+          errEl.textContent = msg || 'Terjadi kesalahan. Coba lagi.';
         return;
       }
+      // Sukses masuk — onAuthStateChange akan handle sisanya
+      // (tidak perlu tambah kode di sini)
+
+    } else {
+      // ── SIGN UP ──
+      const { data, error } = await supabaseClient.auth.signUp({ email, password });
+
+      if(error) {
+        const msg = error.message || '';
+        if(msg.includes('already registered') || msg.includes('User already registered'))
+          errEl.textContent = 'Email sudah terdaftar. Silakan masuk.';
+        else if(msg.includes('Failed to fetch') || msg.includes('NetworkError'))
+          errEl.textContent = 'Tidak bisa terhubung ke server. Cek koneksi internet.';
+        else if(msg.includes('Password should be'))
+          errEl.textContent = 'Password terlalu lemah. Gunakan kombinasi huruf dan angka.';
+        else
+          errEl.textContent = msg || 'Terjadi kesalahan. Coba lagi.';
+        return;
+      }
+
+      // FIX #1: Bedakan dua skenario signUp:
+      // Skenario A — email confirmation diaktifkan: data.session = null
+      if(data?.user && !data.session) {
+        errEl.style.color = '#1D9E75';
+        errEl.textContent = '✓ Akun dibuat! Cek email kamu untuk konfirmasi, lalu masuk.';
+        document.getElementById('resend-box').style.display = 'block';
+        return;
+      }
+
+      // Skenario B — email confirmation dimatikan: langsung dapat session
+      // onAuthStateChange SIGNED_IN akan otomatis dipanggil, tidak perlu lakukan apa-apa
+      if(data?.session) {
+        errEl.style.color = '#1D9E75';
+        errEl.textContent = '✓ Akun berhasil dibuat! Sedang masuk...';
+        // onAuthStateChange akan handle redirect ke app
+        return;
+      }
+
+      // Skenario C — tidak ada user maupun session (sangat jarang)
+      errEl.textContent = 'Gagal membuat akun. Coba lagi.';
     }
-    if(result.error) {
-      const msg = result.error.message;
-      console.error('Auth error:', result.error);
-      if(msg.includes('Failed to fetch') || msg.includes('fetch'))
-        errEl.textContent = 'Tidak bisa terhubung ke server. Cek koneksi internet atau coba lagi.';
-      else if(msg.includes('Invalid login credentials')) errEl.textContent = 'Email atau password salah.';
-      else if(msg.includes('already registered')) errEl.textContent = 'Email sudah terdaftar, silahkan masuk.';
-      else errEl.textContent = msg;
-    }
-    // Jika sukses → onAuthStateChange otomatis handle
+
   } catch(e) {
-    errEl.textContent = e.message;
+    // FIX #1: Tangkap network error yang tidak ter-catch oleh Supabase
+    if(e.name === 'TypeError' && e.message.includes('fetch'))
+      errEl.textContent = 'Tidak bisa terhubung ke server. Cek koneksi internet.';
+    else
+      errEl.textContent = e.message || 'Terjadi kesalahan tidak diketahui.';
   } finally {
     btn.disabled = false;
     btn.innerHTML = `<i class="ti ti-login"></i> <span id="btn-login-label">${loginMode==='masuk'?'Masuk':'Daftar'}</span>`;
   }
 }
 
-// Enter key untuk submit
 document.addEventListener('keydown', e => {
   if(e.key==='Enter' && document.getElementById('login-screen').classList.contains('visible')) submitLogin();
 });
 
 async function logout() {
+  showLoading(true);
   await supabaseClient.auth.signOut();
   currentUser = null;
   stateRowId = null;
   state = structuredClone(defaultState);
   setUserUI(null);
+  showLoading(false);
   showLoginScreen(true);
   showToast('Berhasil keluar');
 }
@@ -881,16 +936,33 @@ function setUserUI(user) {
     const email = user.email || 'User';
     const displayName = email.split('@')[0];
     nameEl.textContent = displayName;
-    avatar.textContent = displayName[0].toUpperCase();
-    avatar.innerHTML = displayName[0].toUpperCase(); // reset jika sebelumnya ada img
+    avatar.innerHTML = displayName[0].toUpperCase();
   } else {
     pill.style.display = 'none';
     logoutBtn.style.display = 'none';
   }
 }
 
+async function resendEmail() {
+  const email = document.getElementById('login-email').value.trim();
+  if(!email) { showToast('Masukkan email dulu!','#D85A30'); return; }
+  const btn = document.getElementById('btn-resend');
+  btn.disabled = true;
+  const { error } = await supabaseClient.auth.resend({ type: 'signup', email });
+  if(error) { showToast('Gagal kirim ulang: '+error.message,'#D85A30'); btn.disabled=false; return; }
+  showToast('Email konfirmasi dikirim ulang!');
+  // countdown 60 detik
+  let sisa = 60;
+  const cd = document.getElementById('resend-countdown');
+  const iv = setInterval(()=>{
+    sisa--;
+    cd.textContent = `Kirim ulang lagi dalam ${sisa}s`;
+    if(sisa<=0){ clearInterval(iv); btn.disabled=false; cd.textContent=''; }
+  },1000);
+}
+
 /* ═══════════════════════════════════════════
-   STATE: LOAD & SAVE (per-user)
+   STATE: LOAD & SAVE
 ═══════════════════════════════════════════ */
 async function loadState() {
   if (!currentUser) return;
@@ -907,8 +979,9 @@ async function loadState() {
     if (data && data.length > 0) {
       stateRowId = data[0].id;
       state = data[0].data || structuredClone(defaultState);
+      // Pastikan utangState ada (backward compat)
+      if(!state.utangState) state.utangState = { pulsa:false, cashout:false, barang:false };
     } else {
-      // Buat baris baru untuk user ini
       state = structuredClone(defaultState);
       const { data: inserted, error: insErr } = await supabaseClient
         .from('konter_state')
@@ -924,6 +997,8 @@ async function loadState() {
   } catch (err) {
     showToast('Error: ' + err.message, '#D85A30');
     console.error(err);
+    // Jika gagal load data tapi user sudah login, tetap sembunyikan login screen
+    showLoginScreen(false);
   } finally {
     showLoading(false);
   }
@@ -936,7 +1011,7 @@ async function saveState() {
       .from('konter_state')
       .update({ data: state })
       .eq('id', stateRowId)
-      .eq('user_id', currentUser.id); // extra safety
+      .eq('user_id', currentUser.id);
     if (error) throw error;
   } catch (err) {
     showToast('Gagal simpan: ' + err.message, '#D85A30');
@@ -945,21 +1020,67 @@ async function saveState() {
 }
 
 /* ═══════════════════════════════════════════
-   AUTH STATE LISTENER
+   AUTH STATE LISTENER — FIXED #2
+   Kunci persistent login ada di sini:
+   - INITIAL_SESSION: dipanggil saat halaman pertama load.
+     Jika ada session tersimpan → user langsung masuk tanpa login lagi.
+     Jika tidak ada → tampilkan login screen.
+   - SIGNED_IN: dipanggil setelah berhasil login / signup.
+   - SIGNED_OUT: hanya dipanggil saat logout() eksplisit.
+   - TOKEN_REFRESHED: token diperbarui otomatis, tidak perlu handle khusus.
 ═══════════════════════════════════════════ */
 supabaseClient.auth.onAuthStateChange(async (event, session) => {
-  console.log('Auth event:', event, session);
-  if (session && session.user) {
-    currentUser = session.user;
-    setUserUI(currentUser);
-    await loadState();
-  } else {
+  console.log('Auth event:', event, session?.user?.email);
+
+  if (event === 'INITIAL_SESSION') {
+    // Ini event pertama yang selalu dipanggil saat halaman load
+    authResolved = true;
+    if (session && session.user) {
+      // Ada session tersimpan → langsung masuk ke app
+      currentUser = session.user;
+      setUserUI(currentUser);
+      await loadState();
+    } else {
+      // Tidak ada session → tampilkan login
+      showLoading(false);
+      showLoginScreen(true);
+    }
+    return;
+  }
+
+  if (event === 'SIGNED_IN') {
+    // Dipanggil setelah login/signup berhasil
+    if (session && session.user) {
+      currentUser = session.user;
+      setUserUI(currentUser);
+      await loadState();
+    }
+    return;
+  }
+
+  if (event === 'SIGNED_OUT') {
+    // Hanya dipanggil saat logout() eksplisit
     currentUser = null;
     stateRowId = null;
     state = structuredClone(defaultState);
     setUserUI(null);
     showLoginScreen(true);
     showLoading(false);
+    return;
+  }
+
+  if (event === 'TOKEN_REFRESHED') {
+    // Token diperbarui otomatis — update currentUser saja
+    if (session && session.user) currentUser = session.user;
+    return;
+  }
+
+  if (event === 'USER_UPDATED') {
+    if (session && session.user) {
+      currentUser = session.user;
+      setUserUI(currentUser);
+    }
+    return;
   }
 });
 
@@ -1114,7 +1235,7 @@ function submitCashout() {
   if(state.saldo.cash<total) { showToast('Saldo Cash tidak cukup!','#D85A30'); return; }
 
   state.saldo.cash -= total;
-  if(!isUtang) state.saldo.dana += (total+fee);
+  if(!isUtang) state.saldo[from] += (total+fee);
   else addUtang(utangNama, total+fee, 'Cash Out: '+nama);
 
   state.riwayat.unshift({type:'cashout',nama,from,total,fee,isUtang,utangNama,tgl:now(),date:nowDate()});
@@ -1292,7 +1413,7 @@ function exportCSV() {
   if(!state.riwayat.length) { showToast('Tidak ada data!','#D85A30'); return; }
   const rows=[['Tipe','Nama/Keterangan','Jumlah','Modal','Fee','Dari','Ke','Utang','Tanggal']];
   state.riwayat.forEach(r=>{
-    if(r.type==='pulsa')       rows.push(['Pulsa',r.nama,r.jual,r.modal,'',r.from,'',r.isUtang?'Ya':'Tidak',r.tgl]);
+    if(r.type==='pulsa')        rows.push(['Pulsa',r.nama,r.jual,r.modal,'',r.from,'',r.isUtang?'Ya':'Tidak',r.tgl]);
     else if(r.type==='cashout') rows.push(['Cash Out',r.nama,r.total,'',r.fee,r.from,'',r.isUtang?'Ya':'Tidak',r.tgl]);
     else if(r.type==='barang')  rows.push(['Barang',r.nama,r.jual,r.modal,'','','',r.isUtang?'Ya':'Tidak',r.tgl]);
     else if(r.type==='pindah')  rows.push(['Pindah Saldo','',r.jumlah,'',r.fee,r.from,r.to,'Tidak',r.tgl]);
@@ -1324,19 +1445,9 @@ function showToast(msg, bg) {
 document.getElementById('topbar-date').textContent =
   new Date().toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
 
-// Test koneksi Supabase saat load
-(async () => {
-  try {
-    const { error } = await supabaseClient.from('konter_state').select('id').limit(1);
-    if(error) console.warn('Supabase test query error:', error.message);
-    else console.log('✓ Supabase terhubung');
-  } catch(e) {
-    console.error('✗ Supabase tidak bisa diakses:', e.message);
-  }
-})();
-
-// Tampilkan login screen dulu saat load
-showLoginScreen(true);
+// Tampilkan loading dulu saat halaman pertama buka
+// (akan hilang setelah INITIAL_SESSION selesai dicek)
+showLoading(true);
 </script>
 </body>
 </html>
