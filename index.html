@@ -36,20 +36,35 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #f5f5f0; m
 .login-title { font-size: 22px; font-weight: 700; color: #1a1a18; margin-bottom: 6px; }
 .login-sub { font-size: 13px; color: #888; margin-bottom: 28px; line-height: 1.5; }
 
-.btn-google {
-  display: flex; align-items: center; justify-content: center; gap: 10px;
-  width: 100%; padding: 13px 16px;
-  background: #fff; border: 1.5px solid #d4d4cc;
-  border-radius: 10px; font-size: 14px; font-weight: 600;
-  color: #333; cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+.login-tabs { display: flex; gap: 0; margin-bottom: 22px; border: 1px solid #e0e0da; border-radius: 10px; overflow: hidden; }
+.login-tab {
+  flex: 1; padding: 9px; font-size: 13px; font-weight: 600;
+  border: none; background: transparent; cursor: pointer; color: #888; transition: all 0.15s;
 }
-.btn-google:hover { background: #f9f9f6; border-color: #bbb; box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-1px); }
-.btn-google:active { transform: scale(0.98); }
-.btn-google svg { width: 20px; height: 20px; flex-shrink: 0; }
+.login-tab.active { background: #1D9E75; color: #fff; }
 
-.login-footer { margin-top: 20px; font-size: 11px; color: #bbb; }
+.login-input {
+  width: 100%; padding: 11px 13px;
+  border: 1px solid #ddd; border-radius: 10px;
+  font-size: 14px; color: #1a1a18;
+  outline: none; margin-bottom: 10px;
+  transition: border-color 0.15s;
+}
+.login-input:focus { border-color: #5DCAA5; box-shadow: 0 0 0 3px rgba(93,202,165,0.15); }
+
+.btn-login {
+  width: 100%; padding: 13px;
+  background: #1D9E75; color: #fff;
+  border: none; border-radius: 10px;
+  font-size: 14px; font-weight: 700;
+  cursor: pointer; transition: background 0.15s; margin-top: 4px;
+}
+.btn-login:hover { background: #0F6E56; }
+.btn-login:active { transform: scale(0.99); }
+.btn-login:disabled { background: #aaa; cursor: not-allowed; }
+
+.login-err { font-size: 12px; color: #D85A30; margin-top: 8px; min-height: 18px; text-align: left; }
+.login-footer { margin-top: 18px; font-size: 11px; color: #bbb; }
 
 /* ── LOADING OVERLAY ── */
 #loading-overlay {
@@ -406,18 +421,21 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #f5f5f0; m
   <div class="login-card">
     <div class="login-icon"><i class="ti ti-device-mobile"></i></div>
     <div class="login-title">Konter Monitor</div>
-    <div class="login-sub">Masuk untuk mulai mencatat transaksi kontermu secara aman & tersinkron.</div>
-    <button class="btn-google" onclick="loginGoogle()">
-      <!-- Google logo SVG -->
-      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-      </svg>
-      Masuk dengan Google
+    <div class="login-sub">Masuk atau daftar untuk mulai mencatat transaksi kontermu.</div>
+
+    <div class="login-tabs">
+      <button class="login-tab active" id="tab-masuk" onclick="switchLoginTab('masuk')">Masuk</button>
+      <button class="login-tab" id="tab-daftar" onclick="switchLoginTab('daftar')">Daftar</button>
+    </div>
+
+    <input class="login-input" type="email" id="login-email" placeholder="Email kamu" autocomplete="email">
+    <input class="login-input" type="password" id="login-password" placeholder="Password (min. 6 karakter)" autocomplete="current-password">
+    <div class="login-err" id="login-err"></div>
+
+    <button class="btn-login" id="btn-login-submit" onclick="submitLogin()">
+      <i class="ti ti-login"></i> <span id="btn-login-label">Masuk</span>
     </button>
-    <div class="login-footer">Data kamu tersimpan aman di Supabase</div>
+    <div class="login-footer">Gratis selamanya · Data tersimpan aman</div>
   </div>
 </div>
 
@@ -726,7 +744,7 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #f5f5f0; m
    SUPABASE SETUP
 ═══════════════════════════════════════════ */
 const SUPABASE_URL = 'https://skedbagelbhkhqkkahzj.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_d2TfobbKEk_gVb15mMp1sA_rgWWNrtR';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrZWRiYWdlbGJoa2hxa2thaHpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyMzEyNjMsImV4cCI6MjA5MzgwNzI2M30.cCKigEV7XtCc_xoUrWHD6i_A5QADecCT88Ct04TZzy0';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const SALDO_LABELS = { cash:'Cash', dana:'Dana', agen_pulsa:'Agen Pulsa', digipos:'Digipos', sea_bank:'Sea Bank' };
@@ -754,15 +772,67 @@ function showLoginScreen(on) {
   document.getElementById('login-screen').classList.toggle('visible', on);
 }
 
-async function loginGoogle() {
-  const { error } = await supabaseClient.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo: window.location.href
-    }
-  });
-  if (error) showToast('Login gagal: ' + error.message, '#D85A30');
+/* ── Login tab switch ── */
+let loginMode = 'masuk';
+function switchLoginTab(mode) {
+  loginMode = mode;
+  document.getElementById('tab-masuk').classList.toggle('active', mode==='masuk');
+  document.getElementById('tab-daftar').classList.toggle('active', mode==='daftar');
+  document.getElementById('btn-login-label').textContent = mode==='masuk' ? 'Masuk' : 'Daftar';
+  const errEl = document.getElementById('login-err');
+  errEl.textContent = ''; errEl.style.color = '#D85A30';
 }
+
+async function submitLogin() {
+  const email    = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errEl    = document.getElementById('login-err');
+  const btn      = document.getElementById('btn-login-submit');
+
+  errEl.style.color = '#D85A30';
+  if(!email || !password) { errEl.textContent = 'Email dan password harus diisi.'; return; }
+  if(password.length < 6) { errEl.textContent = 'Password minimal 6 karakter.'; return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader" style="animation:spin 0.7s linear infinite;display:inline-block"></i> Memproses...';
+  errEl.textContent = '';
+
+  try {
+    let result;
+    if(loginMode === 'masuk') {
+      result = await supabaseClient.auth.signInWithPassword({ email, password });
+    } else {
+      result = await supabaseClient.auth.signUp({ email, password });
+      if(!result.error && result.data?.user && !result.data.session) {
+        errEl.style.color = '#1D9E75';
+        errEl.textContent = '✓ Cek email kamu untuk konfirmasi, lalu masuk.';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ti ti-login"></i> <span id="btn-login-label">Daftar</span>';
+        return;
+      }
+    }
+    if(result.error) {
+      const msg = result.error.message;
+      console.error('Auth error:', result.error);
+      if(msg.includes('Failed to fetch') || msg.includes('fetch'))
+        errEl.textContent = 'Tidak bisa terhubung ke server. Cek koneksi internet atau coba lagi.';
+      else if(msg.includes('Invalid login credentials')) errEl.textContent = 'Email atau password salah.';
+      else if(msg.includes('already registered')) errEl.textContent = 'Email sudah terdaftar, silahkan masuk.';
+      else errEl.textContent = msg;
+    }
+    // Jika sukses → onAuthStateChange otomatis handle
+  } catch(e) {
+    errEl.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<i class="ti ti-login"></i> <span id="btn-login-label">${loginMode==='masuk'?'Masuk':'Daftar'}</span>`;
+  }
+}
+
+// Enter key untuk submit
+document.addEventListener('keydown', e => {
+  if(e.key==='Enter' && document.getElementById('login-screen').classList.contains('visible')) submitLogin();
+});
 
 async function logout() {
   await supabaseClient.auth.signOut();
@@ -783,13 +853,11 @@ function setUserUI(user) {
   if (user) {
     pill.style.display = 'flex';
     logoutBtn.style.display = 'flex';
-    const meta = user.user_metadata || {};
-    nameEl.textContent = meta.name || meta.full_name || user.email?.split('@')[0] || 'User';
-    if (meta.avatar_url || meta.picture) {
-      avatar.innerHTML = `<img src="${meta.avatar_url || meta.picture}" alt="avatar">`;
-    } else {
-      avatar.textContent = (nameEl.textContent[0] || '?').toUpperCase();
-    }
+    const email = user.email || 'User';
+    const displayName = email.split('@')[0];
+    nameEl.textContent = displayName;
+    avatar.textContent = displayName[0].toUpperCase();
+    avatar.innerHTML = displayName[0].toUpperCase(); // reset jika sebelumnya ada img
   } else {
     pill.style.display = 'none';
     logoutBtn.style.display = 'none';
@@ -855,6 +923,7 @@ async function saveState() {
    AUTH STATE LISTENER
 ═══════════════════════════════════════════ */
 supabaseClient.auth.onAuthStateChange(async (event, session) => {
+  console.log('Auth event:', event, session);
   if (session && session.user) {
     currentUser = session.user;
     setUserUI(currentUser);
@@ -1229,6 +1298,17 @@ function showToast(msg, bg) {
 ═══════════════════════════════════════════ */
 document.getElementById('topbar-date').textContent =
   new Date().toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+
+// Test koneksi Supabase saat load
+(async () => {
+  try {
+    const { error } = await supabaseClient.from('konter_state').select('id').limit(1);
+    if(error) console.warn('Supabase test query error:', error.message);
+    else console.log('✓ Supabase terhubung');
+  } catch(e) {
+    console.error('✗ Supabase tidak bisa diakses:', e.message);
+  }
+})();
 
 // Tampilkan login screen dulu saat load
 showLoginScreen(true);
