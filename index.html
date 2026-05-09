@@ -773,11 +773,22 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 // FIX #2: persistSession: true memastikan token disimpan di localStorage
 // dan user tidak perlu login ulang selama token belum expired
+// Shared in-memory fallback (dipakai safeStorage & supabaseStorage)
+const _mem = {};
+
+// Custom storage adapter agar Supabase session tidak ikut diblokir Tracking Prevention
+const supabaseStorage = {
+  getItem:    (k) => { try { return localStorage.getItem(k); }    catch { return _mem[k] ?? null; } },
+  setItem:    (k, v) => { try { localStorage.setItem(k, v); }     catch { _mem[k] = v; } },
+  removeItem: (k) => { try { localStorage.removeItem(k); }        catch { delete _mem[k]; } }
+};
+
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
-    persistSession: true,       // simpan session di localStorage (default sudah true, tapi eksplisit lebih aman)
-    autoRefreshToken: true,     // otomatis refresh token sebelum expired
-    detectSessionInUrl: true    // tangkap token dari URL setelah email konfirmasi
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storage: supabaseStorage   // pakai adapter yang aman, fallback ke memory
   }
 });
 
@@ -914,6 +925,8 @@ document.addEventListener('keydown', e => {
 
 async function logout() {
   showLoading(true);
+  // Hapus cache lokal saat logout agar data tidak bocor ke user lain di perangkat yang sama
+  try { safeStorage.del(cacheKey()); } catch {}
   await supabaseClient.auth.signOut();
   currentUser = null;
   stateRowId = null;
@@ -963,10 +976,68 @@ async function resendEmail() {
 
 /* ═══════════════════════════════════════════
    STATE: LOAD & SAVE
+   Strategi: cache-first
+   1. Baca cache localStorage → tampil instan (0ms)
+   2. Fetch Supabase di background → update jika berbeda
+   3. Save: tulis localStorage dulu (sync, instan),
+      lalu kirim ke Supabase di background (tidak blokir UI)
 ═══════════════════════════════════════════ */
+const CACHE_PREFIX = 'konter_cache_';
+
+// Safe storage: fallback ke in-memory jika localStorage diblokir browser
+// (Edge/Safari Tracking Prevention memblokir localStorage dari CDN cross-origin)
+const safeStorage = {
+  get(k)    { try { return localStorage.getItem(k); }    catch { return _mem[k] ?? null; } },
+  set(k, v) { try { localStorage.setItem(k, v); }        catch { _mem[k] = v; } },
+  del(k)    { try { localStorage.removeItem(k); }        catch { delete _mem[k]; } }
+};
+
+function cacheKey() { return CACHE_PREFIX + (currentUser?.id || 'anon'); }
+
+function readCache() {
+  try {
+    const raw = safeStorage.get(cacheKey());
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.state) return null;
+    return parsed;
+  } catch { return null; }
+}
+
+function writeCache(s, rowId) {
+  try {
+    safeStorage.set(cacheKey(), JSON.stringify({ state: s, rowId, savedAt: Date.now() }));
+  } catch(e) { console.warn('Cache write failed:', e); }
+}
+
+function applyState(s, rowId) {
+  state = s;
+  if (!state.utangState) state.utangState = { pulsa:false, cashout:false, barang:false };
+  stateRowId = rowId;
+  renderMiniSaldo();
+  renderSaldoDetail();
+}
+
 async function loadState() {
   if (!currentUser) return;
+
+  // ── LANGKAH 1: Tampil dari cache dulu (instan) ──
+  const cached = readCache();
+  if (cached) {
+    applyState(cached.state, cached.rowId);
+    showLoginScreen(false);
+    showLoading(false);
+    // Sinkronisasi di background tanpa blokir UI
+    syncFromServer(false);
+    return;
+  }
+
+  // ── LANGKAH 2: Tidak ada cache → fetch dari server (pertama kali login) ──
   showLoading(true);
+  await syncFromServer(true);
+}
+
+async function syncFromServer(showUI) {
   try {
     const { data, error } = await supabaseClient
       .from('konter_state')
@@ -977,34 +1048,56 @@ async function loadState() {
     if (error) throw error;
 
     if (data && data.length > 0) {
-      stateRowId = data[0].id;
-      state = data[0].data || structuredClone(defaultState);
-      // Pastikan utangState ada (backward compat)
-      if(!state.utangState) state.utangState = { pulsa:false, cashout:false, barang:false };
+      const serverState = data[0].data || structuredClone(defaultState);
+      const rowId = data[0].id;
+      // Update state & cache dengan data terbaru dari server
+      applyState(serverState, rowId);
+      writeCache(serverState, rowId);
     } else {
-      state = structuredClone(defaultState);
+      // User baru — buat baris di server
+      const fresh = structuredClone(defaultState);
       const { data: inserted, error: insErr } = await supabaseClient
         .from('konter_state')
-        .insert([{ user_id: currentUser.id, data: state }])
+        .insert([{ user_id: currentUser.id, data: fresh }])
         .select();
       if (insErr) throw insErr;
-      if (inserted && inserted.length > 0) stateRowId = inserted[0].id;
+      const rowId = inserted?.[0]?.id || null;
+      applyState(fresh, rowId);
+      writeCache(fresh, rowId);
     }
 
-    renderMiniSaldo();
-    renderSaldoDetail();
-    showLoginScreen(false);
+    if (showUI) {
+      showLoginScreen(false);
+    }
   } catch (err) {
-    showToast('Error: ' + err.message, '#D85A30');
-    console.error(err);
-    // Jika gagal load data tapi user sudah login, tetap sembunyikan login screen
-    showLoginScreen(false);
+    console.error('Sync error:', err);
+    if (showUI) {
+      // Gagal fetch tapi sudah login — tetap buka app dengan state kosong
+      showLoginScreen(false);
+      showToast('Gagal sinkronisasi: ' + err.message, '#D85A30');
+    }
+    // Jika background sync gagal, data cache masih dipakai — tidak ada toast agar tidak ganggu
   } finally {
-    showLoading(false);
+    if (showUI) showLoading(false);
   }
 }
 
-async function saveState() {
+// Antrian save agar tidak spam ke Supabase
+let saveTimer = null;
+
+function saveState() {
+  if (!currentUser) return;
+
+  // Tulis ke cache DULU — instan, tidak ada delay
+  writeCache(state, stateRowId);
+
+  // Debounce kirim ke Supabase: tunggu 800ms setelah aksi terakhir
+  // Jadi kalau user input cepat, hanya 1 request yang dikirim
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => pushToServer(), 800);
+}
+
+async function pushToServer() {
   if (!currentUser || !stateRowId) return;
   try {
     const { error } = await supabaseClient
@@ -1013,8 +1106,10 @@ async function saveState() {
       .eq('id', stateRowId)
       .eq('user_id', currentUser.id);
     if (error) throw error;
+    // Update cache setelah server berhasil (pastikan rowId tetap benar)
+    writeCache(state, stateRowId);
   } catch (err) {
-    showToast('Gagal simpan: ' + err.message, '#D85A30');
+    showToast('Gagal simpan ke server: ' + err.message, '#D85A30');
     console.error(err);
   }
 }
@@ -1269,7 +1364,7 @@ async function submitPengeluaran() {
   state.saldo[from] -= jumlah;
   state.riwayat.unshift({type:'pengeluaran',nama,from,jumlah,tgl:now(),date:nowDate()});
 
-  await saveState();
+  saveState();
   renderMiniSaldo(); renderSaldoDetail();
   document.getElementById('pg-nama').value   = '';
   document.getElementById('pg-jumlah').value = '';
