@@ -10,18 +10,111 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: system-ui, -apple-system, sans-serif; background: #f5f5f0; min-height: 100vh; color: #1a1a18; }
 
+/* ── LOGIN SCREEN ── */
+#login-screen {
+  display: none;
+  position: fixed; inset: 0;
+  background: linear-gradient(135deg, #e8f8f2 0%, #f5f5f0 60%, #d6f0e6 100%);
+  z-index: 9000;
+  align-items: center; justify-content: center;
+}
+#login-screen.visible { display: flex; }
+
+.login-card {
+  background: #fff;
+  border: 1px solid #e0e0da;
+  border-radius: 20px;
+  padding: 40px 32px;
+  width: 90%; max-width: 360px;
+  text-align: center;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.08);
+  animation: fadeUp 0.35s ease;
+}
+@keyframes fadeUp { from { transform: translateY(18px); opacity:0; } to { transform: translateY(0); opacity:1; } }
+
+.login-icon { font-size: 44px; color: #1D9E75; margin-bottom: 16px; }
+.login-title { font-size: 22px; font-weight: 700; color: #1a1a18; margin-bottom: 6px; }
+.login-sub { font-size: 13px; color: #888; margin-bottom: 28px; line-height: 1.5; }
+
+.btn-google {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; padding: 13px 16px;
+  background: #fff; border: 1.5px solid #d4d4cc;
+  border-radius: 10px; font-size: 14px; font-weight: 600;
+  color: #333; cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+.btn-google:hover { background: #f9f9f6; border-color: #bbb; box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-1px); }
+.btn-google:active { transform: scale(0.98); }
+.btn-google svg { width: 20px; height: 20px; flex-shrink: 0; }
+
+.login-footer { margin-top: 20px; font-size: 11px; color: #bbb; }
+
+/* ── LOADING OVERLAY ── */
+#loading-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(255,255,255,0.85);
+  z-index: 8000;
+  align-items: center; justify-content: center;
+  flex-direction: column; gap: 12px;
+}
+#loading-overlay.visible { display: flex; }
+.spinner {
+  width: 32px; height: 32px;
+  border: 3px solid #e0e0da;
+  border-top-color: #1D9E75;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-size: 13px; color: #888; }
+
+/* ── APP ── */
 .app { display: flex; flex-direction: column; min-height: 100vh; }
 
 .topbar {
   background: #fff;
   border-bottom: 1px solid #e5e5e0;
-  padding: 14px 20px;
+  padding: 12px 20px;
   display: flex; align-items: center; justify-content: space-between;
   position: sticky; top: 0; z-index: 100;
 }
 .topbar-brand { font-size: 16px; font-weight: 600; color: #1a1a18; display: flex; align-items: center; gap: 8px; }
 .topbar-brand i { font-size: 20px; color: #1D9E75; }
-.topbar-date { font-size: 12px; color: #888; }
+.topbar-right { display: flex; align-items: center; gap: 10px; }
+.topbar-date { font-size: 11px; color: #888; display: none; }
+@media (min-width: 400px) { .topbar-date { display: block; } }
+
+.user-pill {
+  display: flex; align-items: center; gap: 7px;
+  background: #f5f5f0;
+  border: 1px solid #e5e5e0;
+  border-radius: 20px;
+  padding: 5px 10px 5px 5px;
+  cursor: default;
+}
+.user-avatar {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: #1D9E75; color: #fff;
+  font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden; flex-shrink: 0;
+}
+.user-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.user-name { font-size: 12px; font-weight: 500; color: #444; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.btn-logout {
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid #e5e5e0;
+  border-radius: 8px;
+  font-size: 12px; color: #888;
+  cursor: pointer; display: flex; align-items: center; gap: 4px;
+  transition: all 0.15s;
+}
+.btn-logout:hover { background: #fff0ee; border-color: #D85A30; color: #D85A30; }
 
 .nav {
   background: #fff;
@@ -307,13 +400,50 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #f5f5f0; m
 </style>
 </head>
 <body>
+
+<!-- ══════════════ LOGIN SCREEN ══════════════ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-icon"><i class="ti ti-device-mobile"></i></div>
+    <div class="login-title">Konter Monitor</div>
+    <div class="login-sub">Masuk untuk mulai mencatat transaksi kontermu secara aman & tersinkron.</div>
+    <button class="btn-google" onclick="loginGoogle()">
+      <!-- Google logo SVG -->
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+      </svg>
+      Masuk dengan Google
+    </button>
+    <div class="login-footer">Data kamu tersimpan aman di Supabase</div>
+  </div>
+</div>
+
+<!-- ══════════════ LOADING OVERLAY ══════════════ -->
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <div class="loading-text">Memuat data...</div>
+</div>
+
+<!-- ══════════════ MAIN APP ══════════════ -->
 <div class="app">
   <div class="topbar">
     <div class="topbar-brand">
       <i class="ti ti-device-mobile"></i>
       Konter Monitor
     </div>
-    <div class="topbar-date" id="topbar-date"></div>
+    <div class="topbar-right">
+      <div class="topbar-date" id="topbar-date"></div>
+      <div class="user-pill" id="user-pill" style="display:none">
+        <div class="user-avatar" id="user-avatar">?</div>
+        <span class="user-name" id="user-name"></span>
+      </div>
+      <button class="btn-logout" id="btn-logout" style="display:none" onclick="logout()">
+        <i class="ti ti-logout"></i> Keluar
+      </button>
+    </div>
   </div>
 
   <nav class="nav">
@@ -328,17 +458,13 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #f5f5f0; m
     <!-- PAGE: ENTRY TRX -->
     <div class="page active" id="page-trx">
       <div class="saldo-grid" id="mini-saldo"></div>
-
       <div class="card">
         <div class="card-title"><i class="ti ti-edit"></i> Tambah Transaksi</div>
-
         <div class="trx-tabs">
           <button class="trx-tab active" onclick="setTrxType('pulsa',this)"><i class="ti ti-sim-card"></i> Pulsa</button>
           <button class="trx-tab" onclick="setTrxType('cashout',this)"><i class="ti ti-cash"></i> Cash Out</button>
           <button class="trx-tab" onclick="setTrxType('barang',this)"><i class="ti ti-package"></i> Barang</button>
-          <button class="trx-tab" onclick="setTrxType('pengeluaran',this)">
-  <i class="ti ti-receipt-2"></i> Pengeluaran
-</button>
+          <button class="trx-tab" onclick="setTrxType('pengeluaran',this)"><i class="ti ti-receipt-2"></i> Pengeluaran</button>
         </div>
 
         <!-- PULSA FORM -->
@@ -374,7 +500,6 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #f5f5f0; m
               <input type="number" id="p-jual" placeholder="0" oninput="updatePulsaPreview()">
             </div>
           </div>
-
           <div class="utang-toggle" onclick="toggleUtang('pulsa')">
             <div class="toggle-box" id="toggle-utang-pulsa"></div>
             <span class="toggle-label">Tandai sebagai Utang</span>
@@ -387,7 +512,6 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #f5f5f0; m
               </div>
             </div>
           </div>
-
           <div class="preview-box" id="preview-pulsa">
             <div class="preview-row"><span>Profit</span><strong id="pv-profit">—</strong></div>
             <div class="preview-row"><span>Cash bertambah</span><strong id="pv-cash" style="color:#1D9E75">—</strong></div>
@@ -422,7 +546,6 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #f5f5f0; m
               <input type="number" id="co-fee" placeholder="0" oninput="updateCashoutPreview()">
             </div>
           </div>
-
           <div class="utang-toggle" onclick="toggleUtang('cashout')">
             <div class="toggle-box" id="toggle-utang-cashout"></div>
             <span class="toggle-label">Tandai sebagai Utang</span>
@@ -435,7 +558,6 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #f5f5f0; m
               </div>
             </div>
           </div>
-
           <div class="preview-box show" id="preview-cashout">
             <div class="preview-row"><span>Cash berkurang</span><strong id="co-pv-cash" style="color:#D85A30">—</strong></div>
             <div class="preview-row"><span>Dana bertambah (fee + modal)</span><strong id="co-pv-dana" style="color:#1D9E75">—</strong></div>
@@ -461,7 +583,6 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #f5f5f0; m
               <input type="number" id="br-jual" placeholder="0" oninput="updateBarangPreview()">
             </div>
           </div>
-        
           <div class="utang-toggle" onclick="toggleUtang('barang')">
             <div class="toggle-box" id="toggle-utang-barang"></div>
             <span class="toggle-label">Tandai sebagai Utang</span>
@@ -474,55 +595,46 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #f5f5f0; m
               </div>
             </div>
           </div>
-
           <div class="preview-box" id="preview-barang">
             <div class="preview-row"><span>Profit</span><strong id="br-pv-profit">—</strong></div>
             <div class="preview-row"><span>Cash bertambah</span><strong id="br-pv-cash" style="color:#1D9E75">—</strong></div>
           </div>
           <button class="btn-submit" onclick="submitBarang()"><i class="ti ti-check"></i> Simpan Transaksi Barang</button>
         </div>
+
+        <!-- PENGELUARAN FORM -->
+        <div id="form-pengeluaran" style="display:none">
+          <div class="form-row full">
+            <div class="form-group">
+              <label>Nama Pengeluaran</label>
+              <input type="text" id="pg-nama" placeholder="Cth: Beli kopi, bayar listrik">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Bayar Dari</label>
+              <select id="pg-from">
+                <option value="cash">Cash</option>
+                <option value="dana">Dana</option>
+                <option value="sea_bank">Sea Bank</option>
+                <option value="agen_pulsa">Agen Pulsa</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Jumlah (Rp)</label>
+              <input type="number" id="pg-jumlah" placeholder="0">
+            </div>
+          </div>
+          <button class="btn-submit" onclick="submitPengeluaran()"><i class="ti ti-minus"></i> Simpan Pengeluaran</button>
+        </div>
       </div>
     </div>
- <!-- PENGELUARAN FORM -->
-<div id="form-pengeluaran" style="display:none">
 
-  <div class="form-row full">
-    <div class="form-group">
-      <label>Nama Pengeluaran</label>
-      <input type="text" id="pg-nama" placeholder="Cth: Beli kopi, bayar listrik">
-    </div>
-  </div>
-
-  <div class="form-row">
-    <div class="form-group">
-      <label>Bayar Dari</label>
-      <select id="pg-from">
-        <option value="cash">Cash</option>
-        <option value="dana">Dana</option>
-        <option value="sea_bank">Sea Bank</option>
-        <option value="agen_pulsa">Agen Pulsa</option>
-      </select>
-    </div>
-
-    <div class="form-group">
-      <label>Jumlah (Rp)</label>
-      <input type="number" id="pg-jumlah" placeholder="0">
-    </div>
-  </div>
-
-  <button class="btn-submit" onclick="submitPengeluaran()">
-    <i class="ti ti-minus"></i>
-    Simpan Pengeluaran
-  </button>
-
-</div>
     <!-- PAGE: SALDO -->
     <div class="page" id="page-saldo">
       <div class="section-header">Saldo Saat Ini</div>
       <div class="saldo-grid" id="saldo-detail"></div>
-
       <div class="divider"></div>
-
       <div class="card">
         <div class="card-title"><i class="ti ti-arrows-exchange"></i> Pindah Saldo</div>
         <div class="form-row">
@@ -575,6 +687,7 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #f5f5f0; m
           <option value="cashout">Cash Out</option>
           <option value="barang">Barang</option>
           <option value="pindah">Pindah Saldo</option>
+          <option value="pengeluaran">Pengeluaran</option>
         </select>
         <input type="date" id="filter-date" onchange="renderRiwayat()">
       </div>
@@ -609,13 +722,15 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #f5f5f0; m
 <div class="toast" id="toast"></div>
 
 <script>
-const SALDO_LABELS = { cash:'Cash', dana:'Dana', agen_pulsa:'Agen Pulsa', digipos:'Digipos', sea_bank:'Sea Bank' };
-const SALDO_ICONS = { cash:'ti-cash', dana:'ti-credit-card', agen_pulsa:'ti-sim-card-2', digipos:'ti-device-tablet', sea_bank:'ti-building-bank' };
-
+/* ═══════════════════════════════════════════
+   SUPABASE SETUP
+═══════════════════════════════════════════ */
 const SUPABASE_URL = 'https://skedbagelbhkhqkkahzj.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_d2TfobbKEk_gVb15mMp1sA_rgWWNrtR';
-
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const SALDO_LABELS = { cash:'Cash', dana:'Dana', agen_pulsa:'Agen Pulsa', digipos:'Digipos', sea_bank:'Sea Bank' };
+const SALDO_ICONS  = { cash:'ti-cash', dana:'ti-credit-card', agen_pulsa:'ti-sim-card-2', digipos:'ti-device-tablet', sea_bank:'ti-building-bank' };
 
 const defaultState = {
   saldo: { cash: 0, dana: 0, agen_pulsa: 0, digipos: 0, sea_bank: 0 },
@@ -625,44 +740,145 @@ const defaultState = {
 };
 
 let state = structuredClone(defaultState);
+let currentUser = null;
+let stateRowId = null; // ID baris di Supabase yang sedang dipakai user ini
 
-async function loadState() {
-  const { data, error } = await supabaseClient
-    .from('konter_state')
-    .select('*')
-    .limit(1)
-    .single();
+/* ═══════════════════════════════════════════
+   AUTH
+═══════════════════════════════════════════ */
+function showLoading(on) {
+  document.getElementById('loading-overlay').classList.toggle('visible', on);
+}
 
-  if (data && data.data) {
-    state = data.data;
+function showLoginScreen(on) {
+  document.getElementById('login-screen').classList.toggle('visible', on);
+}
+
+async function loginGoogle() {
+  const { error } = await supabaseClient.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: window.location.href
+    }
+  });
+  if (error) showToast('Login gagal: ' + error.message, '#D85A30');
+}
+
+async function logout() {
+  await supabaseClient.auth.signOut();
+  currentUser = null;
+  stateRowId = null;
+  state = structuredClone(defaultState);
+  setUserUI(null);
+  showLoginScreen(true);
+  showToast('Berhasil keluar');
+}
+
+function setUserUI(user) {
+  const pill = document.getElementById('user-pill');
+  const avatar = document.getElementById('user-avatar');
+  const nameEl = document.getElementById('user-name');
+  const logoutBtn = document.getElementById('btn-logout');
+
+  if (user) {
+    pill.style.display = 'flex';
+    logoutBtn.style.display = 'flex';
+    const meta = user.user_metadata || {};
+    nameEl.textContent = meta.name || meta.full_name || user.email?.split('@')[0] || 'User';
+    if (meta.avatar_url || meta.picture) {
+      avatar.innerHTML = `<img src="${meta.avatar_url || meta.picture}" alt="avatar">`;
+    } else {
+      avatar.textContent = (nameEl.textContent[0] || '?').toUpperCase();
+    }
   } else {
-    state = structuredClone(defaultState);
-
-    await supabaseClient
-      .from('konter_state')
-      .insert([{ data: state }]);
+    pill.style.display = 'none';
+    logoutBtn.style.display = 'none';
   }
+}
 
-  renderMiniSaldo();
+/* ═══════════════════════════════════════════
+   STATE: LOAD & SAVE (per-user)
+═══════════════════════════════════════════ */
+async function loadState() {
+  if (!currentUser) return;
+  showLoading(true);
+  try {
+    const { data, error } = await supabaseClient
+      .from('konter_state')
+      .select('*')
+      .eq('user_id', currentUser.id)
+      .limit(1);
+
+    if (error) throw error;
+
+    if (data && data.length > 0) {
+      stateRowId = data[0].id;
+      state = data[0].data || structuredClone(defaultState);
+    } else {
+      // Buat baris baru untuk user ini
+      state = structuredClone(defaultState);
+      const { data: inserted, error: insErr } = await supabaseClient
+        .from('konter_state')
+        .insert([{ user_id: currentUser.id, data: state }])
+        .select();
+      if (insErr) throw insErr;
+      if (inserted && inserted.length > 0) stateRowId = inserted[0].id;
+    }
+
+    renderMiniSaldo();
+    renderSaldoDetail();
+    showLoginScreen(false);
+  } catch (err) {
+    showToast('Error: ' + err.message, '#D85A30');
+    console.error(err);
+  } finally {
+    showLoading(false);
+  }
 }
 
 async function saveState() {
-  const { data: rows } = await supabaseClient
-    .from('konter_state')
-    .select('id')
-    .limit(1);
-
-  if (rows && rows.length > 0) {
-    await supabaseClient
+  if (!currentUser || !stateRowId) return;
+  try {
+    const { error } = await supabaseClient
       .from('konter_state')
       .update({ data: state })
-      .eq('id', rows[0].id);
+      .eq('id', stateRowId)
+      .eq('user_id', currentUser.id); // extra safety
+    if (error) throw error;
+  } catch (err) {
+    showToast('Gagal simpan: ' + err.message, '#D85A30');
+    console.error(err);
   }
 }
+
+/* ═══════════════════════════════════════════
+   AUTH STATE LISTENER
+═══════════════════════════════════════════ */
+supabaseClient.auth.onAuthStateChange(async (event, session) => {
+  if (session && session.user) {
+    currentUser = session.user;
+    setUserUI(currentUser);
+    await loadState();
+  } else {
+    currentUser = null;
+    stateRowId = null;
+    state = structuredClone(defaultState);
+    setUserUI(null);
+    showLoginScreen(true);
+    showLoading(false);
+  }
+});
+
+/* ═══════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════ */
 function fmt(n) { return 'Rp ' + Math.round(n).toLocaleString('id-ID'); }
 function now() { return new Date().toLocaleString('id-ID', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
 function nowDate() { return new Date().toISOString().slice(0,10); }
 
+/* ═══════════════════════════════════════════
+   NAVIGATION
+═══════════════════════════════════════════ */
 function showPage(id, btn) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -674,6 +890,9 @@ function showPage(id, btn) {
   if(id==='trx') renderMiniSaldo();
 }
 
+/* ═══════════════════════════════════════════
+   RENDER
+═══════════════════════════════════════════ */
 function renderMiniSaldo() {
   const el = document.getElementById('mini-saldo');
   el.innerHTML = Object.entries(state.saldo).map(([k,v])=>`
@@ -697,19 +916,21 @@ function renderSaldoDetail() {
     </div>`;
 }
 
+/* ═══════════════════════════════════════════
+   FORM LOGIC
+═══════════════════════════════════════════ */
 const PRESETS = {
-  'VC20k':   { nama: 'VC 20k', from: 'digipos', modal: 15200, jual: 20000 },
-  'VC15k':   { nama: 'VC 15k', from: 'digipos', modal: 10300, jual: 15000 },
+  'VC20k':   { nama: 'VC 20k',   from: 'digipos', modal: 15200, jual: 20000 },
+  'VC15k':   { nama: 'VC 15k',   from: 'digipos', modal: 10300, jual: 15000 },
   'VC18.5k': { nama: 'VC 18,5k', from: 'digipos', modal: 13300, jual: 18500 }
 };
 
 function fillPreset(key) {
-  const p = PRESETS[key];
-  if(!p) return;
-  document.getElementById('p-nama').value = p.nama;
-  document.getElementById('p-from').value = p.from;
+  const p = PRESETS[key]; if(!p) return;
+  document.getElementById('p-nama').value  = p.nama;
+  document.getElementById('p-from').value  = p.from;
   document.getElementById('p-modal').value = p.modal;
-  document.getElementById('p-jual').value = p.jual;
+  document.getElementById('p-jual').value  = p.jual;
   updatePulsaPreview();
   showToast('Form diisi: ' + p.nama);
 }
@@ -718,7 +939,7 @@ function setTrxType(type, btn) {
   document.querySelectorAll('.trx-tab').forEach(t=>t.classList.remove('active'));
   if(btn) btn.classList.add('active');
   ['pulsa','cashout','barang','pengeluaran'].forEach(t=>{
-    document.getElementById('form-'+t).style.display = t===type?'block':'none';
+    document.getElementById('form-'+t).style.display = t===type ? 'block' : 'none';
   });
 }
 
@@ -732,29 +953,29 @@ function toggleUtang(type) {
 
 function updatePulsaPreview() {
   const modal = parseFloat(document.getElementById('p-modal').value)||0;
-  const jual = parseFloat(document.getElementById('p-jual').value)||0;
+  const jual  = parseFloat(document.getElementById('p-jual').value)||0;
   if(modal||jual) {
     document.getElementById('preview-pulsa').classList.add('show');
     document.getElementById('pv-profit').textContent = fmt(jual-modal);
-    document.getElementById('pv-cash').textContent = fmt(jual);
-    document.getElementById('pv-saldo').textContent = fmt(modal);
+    document.getElementById('pv-cash').textContent   = fmt(jual);
+    document.getElementById('pv-saldo').textContent  = fmt(modal);
   }
 }
 
 function updateCashoutPreview() {
   const total = parseFloat(document.getElementById('co-total').value)||0;
-  const fee = parseFloat(document.getElementById('co-fee').value)||0;
-  document.getElementById('co-pv-cash').textContent = fmt(total);
-  document.getElementById('co-pv-dana').textContent = fmt(total+fee);
+  const fee   = parseFloat(document.getElementById('co-fee').value)||0;
+  document.getElementById('co-pv-cash').textContent  = fmt(total);
+  document.getElementById('co-pv-dana').textContent  = fmt(total+fee);
 }
 
 function updateBarangPreview() {
   const modal = parseFloat(document.getElementById('br-modal').value)||0;
-  const jual = parseFloat(document.getElementById('br-jual').value)||0;
+  const jual  = parseFloat(document.getElementById('br-jual').value)||0;
   if(modal||jual) {
     document.getElementById('preview-barang').classList.add('show');
     document.getElementById('br-pv-profit').textContent = fmt(jual-modal);
-    document.getElementById('br-pv-cash').textContent = fmt(jual);
+    document.getElementById('br-pv-cash').textContent   = fmt(jual);
   }
 }
 
@@ -765,116 +986,103 @@ function addUtang(namaInput, jumlah, desc) {
   else { state.utang.push({nama:eName,total:jumlah,trx:[{desc,jumlah,tgl:now()}]}); }
 }
 
+/* ═══════════════════════════════════════════
+   SUBMIT HANDLERS
+═══════════════════════════════════════════ */
 function submitPulsa() {
   const nama = document.getElementById('p-nama').value.trim();
   const from = document.getElementById('p-from').value;
   const modal = parseFloat(document.getElementById('p-modal').value)||0;
-  const jual = parseFloat(document.getElementById('p-jual').value)||0;
-  const isUtang = state.utangState.pulsa;
+  const jual  = parseFloat(document.getElementById('p-jual').value)||0;
+  const isUtang   = state.utangState.pulsa;
   const utangNama = document.getElementById('p-utang-nama').value.trim();
 
   if(!nama||!modal||!jual) { showToast('Lengkapi semua field!','#D85A30'); return; }
-  if(state.saldo[from] < modal) { showToast('Saldo '+SALDO_LABELS[from]+' tidak cukup!','#D85A30'); return; }
+  if(state.saldo[from]<modal) { showToast('Saldo '+SALDO_LABELS[from]+' tidak cukup!','#D85A30'); return; }
 
   state.saldo[from] -= modal;
-  if(!isUtang) { state.saldo.cash += jual; }
-  else { addUtang(utangNama, jual, 'Pulsa: '+nama); }
+  if(!isUtang) state.saldo.cash += jual;
+  else addUtang(utangNama, jual, 'Pulsa: '+nama);
 
   state.riwayat.unshift({type:'pulsa',nama,from,modal,jual,isUtang,utangNama,tgl:now(),date:nowDate()});
   saveState(); showToast('Transaksi pulsa disimpan!'); resetForm('pulsa'); renderMiniSaldo();
 }
 
 function submitCashout() {
-  const nama = document.getElementById('co-nama').value.trim();
+  const nama  = document.getElementById('co-nama').value.trim();
   const total = parseFloat(document.getElementById('co-total').value)||0;
-  const fee = parseFloat(document.getElementById('co-fee').value)||0;
-  const from = document.getElementById('co-from').value;
-  const isUtang = state.utangState.cashout;
+  const fee   = parseFloat(document.getElementById('co-fee').value)||0;
+  const from  = document.getElementById('co-from').value;
+  const isUtang   = state.utangState.cashout;
   const utangNama = document.getElementById('co-utang-nama').value.trim();
 
   if(!nama||!total) { showToast('Lengkapi semua field!','#D85A30'); return; }
-  if(state.saldo.cash < total) { showToast('Saldo Cash tidak cukup!','#D85A30'); return; }
+  if(state.saldo.cash<total) { showToast('Saldo Cash tidak cukup!','#D85A30'); return; }
 
   state.saldo.cash -= total;
-  if(!isUtang) { state.saldo.dana += (total+fee); }
-  else { addUtang(utangNama, total+fee, 'Cash Out: '+nama); }
+  if(!isUtang) state.saldo.dana += (total+fee);
+  else addUtang(utangNama, total+fee, 'Cash Out: '+nama);
 
   state.riwayat.unshift({type:'cashout',nama,from,total,fee,isUtang,utangNama,tgl:now(),date:nowDate()});
   saveState(); showToast('Cash out disimpan!'); resetForm('cashout'); renderMiniSaldo();
 }
 
 function submitBarang() {
-  const nama = document.getElementById('br-nama').value.trim();
+  const nama  = document.getElementById('br-nama').value.trim();
   const modal = parseFloat(document.getElementById('br-modal').value)||0;
-  const jual = parseFloat(document.getElementById('br-jual').value)||0;
-  const isUtang = state.utangState.barang;
+  const jual  = parseFloat(document.getElementById('br-jual').value)||0;
+  const isUtang   = state.utangState.barang;
   const utangNama = document.getElementById('br-utang-nama').value.trim();
 
   if(!nama||!modal||!jual) { showToast('Lengkapi semua field!','#D85A30'); return; }
 
-  if(!isUtang) { state.saldo.cash += jual; }
-  else { addUtang(utangNama, jual, 'Barang: '+nama); }
+  if(!isUtang) state.saldo.cash += jual;
+  else addUtang(utangNama, jual, 'Barang: '+nama);
 
   state.riwayat.unshift({type:'barang',nama,modal,jual,isUtang,utangNama,tgl:now(),date:nowDate()});
   saveState(); showToast('Transaksi barang disimpan!'); resetForm('barang'); renderMiniSaldo();
 }
-  async function submitPengeluaran() {
 
-  const nama = document.getElementById('pg-nama').value.trim();
-  const from = document.getElementById('pg-from').value;
-  const jumlah = parseFloat(document.getElementById('pg-jumlah').value) || 0;
+async function submitPengeluaran() {
+  const nama   = document.getElementById('pg-nama').value.trim();
+  const from   = document.getElementById('pg-from').value;
+  const jumlah = parseFloat(document.getElementById('pg-jumlah').value)||0;
 
-  if (!nama || !jumlah) {
-    showToast('Lengkapi field!', '#D85A30');
-    return;
-  }
-
-  if (state.saldo[from] < jumlah) {
-    showToast('Saldo tidak cukup!', '#D85A30');
-    return;
-  }
+  if(!nama||!jumlah) { showToast('Lengkapi field!','#D85A30'); return; }
+  if(state.saldo[from]<jumlah) { showToast('Saldo tidak cukup!','#D85A30'); return; }
 
   state.saldo[from] -= jumlah;
-
-  state.riwayat.unshift({
-    type: 'pengeluaran',
-    nama,
-    from,
-    jumlah,
-    tgl: now(),
-    date: nowDate()
-  });
+  state.riwayat.unshift({type:'pengeluaran',nama,from,jumlah,tgl:now(),date:nowDate()});
 
   await saveState();
-
-  renderMiniSaldo();
-  renderSaldoDetail();
-
-  document.getElementById('pg-nama').value = '';
+  renderMiniSaldo(); renderSaldoDetail();
+  document.getElementById('pg-nama').value   = '';
   document.getElementById('pg-jumlah').value = '';
-
   showToast('Pengeluaran disimpan!');
 }
 
 function submitPindah() {
-  const from = document.getElementById('ps-from').value;
-  const to = document.getElementById('ps-to').value;
+  const from   = document.getElementById('ps-from').value;
+  const to     = document.getElementById('ps-to').value;
   const jumlah = parseFloat(document.getElementById('ps-jumlah').value)||0;
-  const fee = parseFloat(document.getElementById('ps-fee').value)||0;
+  const fee    = parseFloat(document.getElementById('ps-fee').value)||0;
 
-  if(from===to) { showToast('From & To tidak boleh sama!','#D85A30'); return; }
-  if(!jumlah) { showToast('Masukkan jumlah!','#D85A30'); return; }
-  if(state.saldo[from] < (jumlah+fee)) { showToast('Saldo '+SALDO_LABELS[from]+' tidak cukup!','#D85A30'); return; }
+  if(from===to)   { showToast('From & To tidak boleh sama!','#D85A30'); return; }
+  if(!jumlah)     { showToast('Masukkan jumlah!','#D85A30'); return; }
+  if(state.saldo[from]<(jumlah+fee)) { showToast('Saldo '+SALDO_LABELS[from]+' tidak cukup!','#D85A30'); return; }
 
   state.saldo[from] -= (jumlah+fee);
-  state.saldo[to] += jumlah;
+  state.saldo[to]   += jumlah;
   state.riwayat.unshift({type:'pindah',from,to,jumlah,fee,tgl:now(),date:nowDate()});
   saveState(); showToast('Pindah saldo berhasil!');
-  document.getElementById('ps-jumlah').value='';
-  document.getElementById('ps-fee').value='';
+  document.getElementById('ps-jumlah').value = '';
+  document.getElementById('ps-fee').value    = '';
   renderSaldoDetail();
 }
 
+/* ═══════════════════════════════════════════
+   RIWAYAT
+═══════════════════════════════════════════ */
 function renderRiwayat() {
   const fType = document.getElementById('filter-type').value;
   const fDate = document.getElementById('filter-date').value;
@@ -884,19 +1092,16 @@ function renderRiwayat() {
     return true;
   });
 
-  // Summary
-  let totalProfit = 0, totalTrx = 0;
-  list.forEach(r=>{
-    if(r.type==='pulsa'||r.type==='barang') { totalProfit += (r.jual-r.modal); totalTrx++; }
-  });
+  let totalProfit = 0;
+  list.forEach(r=>{ if(r.type==='pulsa'||r.type==='barang') totalProfit += (r.jual-r.modal); });
   document.getElementById('summary-row').innerHTML = `
     <div class="summary-pill"><span>Total Trx</span><strong>${list.length}</strong></div>
-    <div class="summary-pill profit"><span>Profit Hari Ini</span><strong>${fmt(totalProfit)}</strong></div>`;
+    <div class="summary-pill profit"><span>Profit</span><strong>${fmt(totalProfit)}</strong></div>`;
 
   const el = document.getElementById('riwayat-list');
   if(!list.length) { el.innerHTML='<div class="empty-state"><i class="ti ti-history"></i>Belum ada riwayat transaksi</div>'; return; }
 
-  el.innerHTML = list.map((r,i)=>{
+  el.innerHTML = list.map(r=>{
     let title='',sub='',amount='',amtClass='',badge='';
     if(r.type==='pulsa'){
       title=r.nama; sub=`Dari: ${SALDO_LABELS[r.from]} • Modal: ${fmt(r.modal)} • Profit: ${fmt(r.jual-r.modal)}`;
@@ -911,40 +1116,37 @@ function renderRiwayat() {
       amount=r.isUtang?`Utang ${fmt(r.jual)}`:'+'+fmt(r.jual); amtClass=r.isUtang?'amount-minus':'amount-plus';
       badge=`<span class="badge badge-barang">Barang</span>${r.isUtang?'<span class="badge badge-utang" style="margin-left:4px">Utang</span>':''}`;
     } else if(r.type==='pindah'){
-      title=`${SALDO_LABELS[r.from]} → ${SALDO_LABELS[r.to]}`;
-      sub=r.fee?`Fee: ${fmt(r.fee)}`:'Tanpa fee';
+      title=`${SALDO_LABELS[r.from]} → ${SALDO_LABELS[r.to]}`; sub=r.fee?`Fee: ${fmt(r.fee)}`:'Tanpa fee';
       amount=fmt(r.jumlah); amtClass='amount-plus';
       badge='<span class="badge badge-pindah">Pindah Saldo</span>';
     } else if(r.type==='bayar_utang'){
       title='Bayar Utang — '+r.nama; sub='';
       amount='+'+fmt(r.jumlah); amtClass='amount-plus';
       badge='<span class="badge badge-bayar">Bayar Utang</span>';
+    } else if(r.type==='pengeluaran'){
+      title=r.nama; sub=`Dari: ${SALDO_LABELS[r.from]}`;
+      amount='-'+fmt(r.jumlah); amtClass='amount-minus';
+      badge='<span class="badge badge-utang">Pengeluaran</span>';
     }
-    else if(r.type==='pengeluaran'){
-  title = r.nama;
-  sub = `Dari: ${SALDO_LABELS[r.from]}`;
-  amount = '-' + fmt(r.jumlah);
-  amtClass = 'amount-minus';
-  badge = '<span class="badge badge-utang">Pengeluaran</span>';
-}
     return `<div class="riwayat-item">
       <div class="riwayat-left">
         <div class="riwayat-title">${title}</div>
         <div class="riwayat-sub">${sub}${sub?' • ':''}${r.tgl}</div>
         ${badge}
       </div>
-      <div class="riwayat-right">
-        <div class="riwayat-amount ${amtClass}">${amount}</div>
-      </div>
+      <div class="riwayat-right"><div class="riwayat-amount ${amtClass}">${amount}</div></div>
     </div>`;
   }).join('');
 }
 
+/* ═══════════════════════════════════════════
+   UTANG
+═══════════════════════════════════════════ */
 function renderUtang() {
   const el = document.getElementById('utang-list');
   const active = state.utang.filter(u=>u.total>0);
   if(!active.length){ el.innerHTML='<div class="empty-state"><i class="ti ti-receipt"></i>Tidak ada utang tercatat</div>'; return; }
-  el.innerHTML = active.map((u,i)=>`
+  el.innerHTML = active.map((u)=>`
     <div class="utang-item">
       <div class="utang-info">
         <div class="utang-name"><i class="ti ti-user"></i>${u.nama}</div>
@@ -975,84 +1177,61 @@ function confirmBayarUtang() {
   saveState(); closeModal(); showToast('Pembayaran utang dicatat!'); renderUtang();
 }
 
+/* ═══════════════════════════════════════════
+   UTILITIES
+═══════════════════════════════════════════ */
 function resetForm(type) {
-  const fields = { pulsa:['p-nama','p-modal','p-jual','p-utang-nama'], cashout:['co-nama','co-total','co-fee','co-utang-nama'], barang:['br-nama','br-modal','br-jual','br-utang-nama'] };
+  const fields = {
+    pulsa:   ['p-nama','p-modal','p-jual','p-utang-nama'],
+    cashout: ['co-nama','co-total','co-fee','co-utang-nama'],
+    barang:  ['br-nama','br-modal','br-jual','br-utang-nama']
+  };
   fields[type].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   state.utangState[type]=false;
   document.getElementById('toggle-utang-'+type).classList.remove('on');
   document.getElementById('utang-fields-'+type).style.display='none';
-  const prev = document.getElementById('preview-'+type);
+  const prev=document.getElementById('preview-'+type);
   if(prev) prev.classList.remove('show');
 }
 
 function exportCSV() {
   if(!state.riwayat.length) { showToast('Tidak ada data!','#D85A30'); return; }
-  const rows = [['Tipe','Nama/Keterangan','Jumlah','Modal','Fee','Dari','Ke','Utang','Tanggal']];
+  const rows=[['Tipe','Nama/Keterangan','Jumlah','Modal','Fee','Dari','Ke','Utang','Tanggal']];
   state.riwayat.forEach(r=>{
-    if(r.type==='pulsa') rows.push(['Pulsa',r.nama,r.jual,r.modal,'',r.from,'',r.isUtang?'Ya':'Tidak',r.tgl]);
+    if(r.type==='pulsa')       rows.push(['Pulsa',r.nama,r.jual,r.modal,'',r.from,'',r.isUtang?'Ya':'Tidak',r.tgl]);
     else if(r.type==='cashout') rows.push(['Cash Out',r.nama,r.total,'',r.fee,r.from,'',r.isUtang?'Ya':'Tidak',r.tgl]);
-    else if(r.type==='barang') rows.push(['Barang',r.nama,r.jual,r.modal,'','','',r.isUtang?'Ya':'Tidak',r.tgl]);
-    else if(r.type==='pindah') rows.push(['Pindah Saldo','',r.jumlah,'',r.fee,r.from,r.to,'Tidak',r.tgl]);
+    else if(r.type==='barang')  rows.push(['Barang',r.nama,r.jual,r.modal,'','','',r.isUtang?'Ya':'Tidak',r.tgl]);
+    else if(r.type==='pindah')  rows.push(['Pindah Saldo','',r.jumlah,'',r.fee,r.from,r.to,'Tidak',r.tgl]);
     else if(r.type==='bayar_utang') rows.push(['Bayar Utang',r.nama,r.jumlah,'','','','','Tidak',r.tgl]);
+    else if(r.type==='pengeluaran') rows.push(['Pengeluaran',r.nama,r.jumlah,'','',r.from,'','Tidak',r.tgl]);
   });
-  const csv = rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
-  const blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
-  const a = document.createElement('a'); a.href=URL.createObjectURL(blob);
+  const csv=rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
   a.download='riwayat-konter-'+nowDate()+'.csv'; a.click();
   showToast('Data berhasil diexport!');
 }
 
 function clearRiwayat() {
   if(!confirm('Hapus semua riwayat transaksi?')) return;
-  state.riwayat = []; saveState(); renderRiwayat(); showToast('Riwayat dihapus');
+  state.riwayat=[]; saveState(); renderRiwayat(); showToast('Riwayat dihapus');
 }
 
 function showToast(msg, bg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.style.background = bg||'#0F6E56';
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.style.background=bg||'#0F6E56';
   t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'),2500);
 }
 
-// Init
+/* ═══════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════ */
 document.getElementById('topbar-date').textContent =
-  new Date().toLocaleDateString('id-ID',{
-    weekday:'long',
-    day:'numeric',
-    month:'long',
-    year:'numeric'
-  });
+  new Date().toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
 
-loadState().then(() => {
-  console.log('STATE:', state);
-});
-  async function loadState() {
-  try {
-
-    const { data, error } = await supabaseClient
-      .from('konter_state')
-      .select('*');
-
-    console.log('SUPABASE DATA:', data);
-    console.log('SUPABASE ERROR:', error);
-
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    if (data && data.length > 0) {
-      state = data[0].data;
-    }
-
-    renderMiniSaldo();
-    renderSaldoDetail();
-
-  } catch (err) {
-    console.error(err);
-    alert(err.message);
-  }
-}
+// Tampilkan login screen dulu saat load
+showLoginScreen(true);
 </script>
 </body>
 </html>
